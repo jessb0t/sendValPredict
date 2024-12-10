@@ -1,0 +1,18 @@
+# OS specific files
+.DS_Store
+
+# Conda files
+.conda
+
+# Rhistory files
+.Rhistory
+
+# raw SEND files
+data/wavs/*.wav
+data/ratings_ewe/*.csv
+data/transcriptions/*.tsv
+
+# work-in-progress files
+misc/*
+fine_tuned_wav2vec2_emotion_model/*
+wav2vec2-large-robust-12-ft-emotion-msp-dim/*
