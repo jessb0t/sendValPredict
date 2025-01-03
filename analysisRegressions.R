@@ -1,6 +1,6 @@
 # sendValPredict: linear regression analyses
 # Author: Jessica M. Alexander
-# Last Updated: 2024-11-25
+# Last Updated: 2025-01-03
 # Input:
 #     --preprocessed, aggregated data (data.csv)
 # Output:
@@ -148,7 +148,7 @@ for (i in 1:iterations){
   
   #warriner ratings
   print(paste("running warriner model, iteration ", as.character(i)))
-  mdl <- lmer(ewe ~ val + aro + (1|spkr), data=data)
+  mdl <- lmer(ewe ~ valMean + aroMean + (1|spkr), data=data)
   a[i,2:ncol(a)] <- as.list(fixef(mdl))
 
   #glove embeddings
@@ -224,8 +224,8 @@ calculate_significance <- function(databoot){
   tval <- betas / stderr
   tval_abs <- abs(tval)
   pvals <- lapply(tval_abs, function(q) 2 * pt(q, nrow(databoot), lower.tail=FALSE))
-  allps <- unlist(pvals)[2:length(pvals)] #drop "i" column
-  betas <- betas[2:length(betas)]
+  allps <- unlist(pvals)[3:length(pvals)] #drop "i" column and intercept
+  betas <- betas[3:length(betas)] #drop intercept
   return (betas[allps < 0.05])
 }
 

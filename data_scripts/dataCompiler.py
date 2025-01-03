@@ -43,36 +43,34 @@ def find_centroid(sentence, gspace, spacy_obj):
     return centroid
 
 #averaged lexical valence and arousal from Warriner
-def compute_val_aro(sentence, warriner, spacy_obj):
+def compute_val_aro(chunk, warriner, spacy_obj):
     """
-    Function to compute the averaged lexical valence and arousal
-    of lemmas in a sentence based on the Warriner et al. (2013) ratings.
-    Ratings are zero-centered based on the Warriner dataset median,
-    such that a value of 0 corresponds to 'neutral.'
+    Function to compute: the averaged lexical valence and arousal and
+    of lemmas in a chunk based on the Warriner et al. (2013) ratings.
+    Ratings are normalized based on the Warriner dataset max of 9,
+    such that values range from 0 to 1.
     INPUTS:
     - sentence (string)
     - warriner (dataframe of human ratings)
-    - spacy_obj (tokenized spacy model)
+    - spacy_obj (tokenized spaCy model)
     OUTPUT:
-    - val (float)
-    - aro (float)
+    - valMean (float)
+    - aroMean (float)
     """
-    warriner_median_valence = statistics.median(warriner["V.Mean.Sum"])
-    warriner_median_arousal = statistics.median(warriner["A.Mean.Sum"])
-    processed = spacy_obj(sentence)
+    processed = spacy_obj(chunk)
     lemmas = [w.lemma_ for w in processed if not w.is_punct]
     lemmas_with_ratings = [w for w in lemmas if w in list(warriner["Word"])]
     
     if len(lemmas_with_ratings)>0:
         ids = [list(warriner["Word"]).index(w) for w in lemmas_with_ratings]
-        vals = [list(warriner["V.Mean.Sum"])[idx]-warriner_median_valence for idx in ids]
-        aros = [list(warriner["A.Mean.Sum"])[idx]-warriner_median_arousal for idx in ids]
-        val = np.mean(vals)
-        aro = np.mean(aros)
+        vals = [list(warriner["V.Mean.Sum"])[idx]/9 for idx in ids]
+        aros = [list(warriner["A.Mean.Sum"])[idx]/9 for idx in ids]
+        valMean = np.mean(vals)
+        aroMean = np.mean(aros)
     else:
-        val = None
-        aro = None
-    return val, aro
+        valMean = None
+        aroMean = None
+    return valMean, aroMean
 
 #loop over all transcription files to build dataframe
 all_dfs = []
@@ -80,8 +78,8 @@ for i,fileT in enumerate(os.listdir(os.path.join(inpath, "transcriptions"))):
     if fileT.endswith("tsv"):
         print(fileT)
         filepartsT = fileT.split("_")
-        spkr = filepartsT[0] #identify speaker ID
-        video = filepartsT[1] #identify video ID
+        spk = filepartsT[0] #identify speaker ID
+        vid = filepartsT[1] #identify video ID
 
         #read in transcription data
         df = pd.read_csv(os.path.join(inpath, "transcriptions", fileT), sep='\t')
@@ -95,7 +93,7 @@ for i,fileT in enumerate(os.listdir(os.path.join(inpath, "transcriptions"))):
 
         for c, chunk in enumerate(words):
             if not pd.isna(chunk):
-                val, aro = compute_val_aro(chunk, warriner, spacy_obj)
+                valMean, aroMean = compute_val_aro(chunk, warriner, spacy_obj)
                 centroid = find_centroid(chunk, gspace, spacy_obj)
                 try:
                     tmp = centroid.any()
@@ -105,23 +103,23 @@ for i,fileT in enumerate(os.listdir(os.path.join(inpath, "transcriptions"))):
                     for i in range(300):
                         glove[i].append(None)
             else:
-                val = None
-                aro = None
+                valMean = None
+                aroMean = None
                 for i in range(300):
                     glove[i].append(None)
             
-            mean_valence.append(val)
-            mean_arousal.append(aro)
+            mean_valence.append(valMean)
+            mean_arousal.append(aroMean)
 
             #extract matching acoustic features
-            fileA = spkr + "_" + video + "_egemaps.csv"
+            fileA = spk + "_" + vid + "_egemaps.csv"
             egemapsDat = pd.read_csv(os.path.join(inpath, "egemaps", fileA))
             cols = range(4, egemapsDat.shape[1])
             acoustics = egemapsDat[egemapsDat.columns[cols]][0:rows]
             acoustics_dict = acoustics.to_dict('series')
 
             #find ratings file
-            fileR = "results_" + spkr[2:] + "_" + video[3] + ".csv"
+            fileR = "results_" + spk[2:] + "_" + vid[3] + ".csv"
             ratingsDat = pd.read_csv(os.path.join(inpath, "ratings_ewe", fileR))
             ratings = []
             for d in range(rows):
@@ -132,13 +130,13 @@ for i,fileT in enumerate(os.listdir(os.path.join(inpath, "transcriptions"))):
                     averaged = summed/10
                 ratings.append(averaged)
 
-    spkr = [spkr for i in range(rows)] #output: identity of speaker
-    video = [video for i in range(rows)] #output: video ID
-    time = list(df['time']) #output: time stamp
+        spkr = [spk for i in range(rows)] #output: identity of speaker
+        video = [vid for i in range(rows)] #output: video ID
+        time = list(df['time']) #output: time stamp
 
-    dict = {'spkr': spkr, 'video': video, 'time': time, 'words': words, 'val': mean_valence, 'aro': mean_arousal, 'ewe': ratings}
-    dict = dict | acoustics_dict | glove
-    all_dfs.append(dict)
+        dict = {'spkr': spkr, 'video': video, 'time': time, 'words': words, 'valMean': mean_valence, 'aroMean': mean_arousal, 'ewe': ratings}
+        dict = dict | acoustics_dict | glove
+        all_dfs.append(dict)
 
 frames = [pd.DataFrame(vid) for vid in all_dfs]
 out = pd.concat(frames)
